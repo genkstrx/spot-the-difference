@@ -172,7 +172,7 @@ var C = {
   quay: '#6b5847', quayDark: '#4e4034', plank: '#5a4a3c',
   moon: '#ffd9a3', moonAlt: '#cfe6ff',
   cloud: '#efe7f2', cloudAlt: '#f2c9c0',
-  bird: '#2a2f45',
+  bird: '#e6e1d4',
   hill: '#232a4a',
   tower: '#f4efe4', band: '#d9503c', bandAlt: '#3f6b8a',
   rock: '#3a3f52',
@@ -187,7 +187,7 @@ var C = {
   rope: '#c9a86a',
   cat: '#26221f',
   bench: '#5c4a38',
-  lamp: '#2f333d', lampGlass: '#ffd27a', lampGlassAlt: '#9fb4c8',
+  lamp: '#2f333d', lampGlass: '#ffd27a', lampGlassAlt: '#4a4f5c',
   gull: '#f2efe6', beak: '#e0a13c',
   star: '#cfe0ff',
   marker: '#ffd166',
@@ -288,7 +288,7 @@ function buildScene(rng) {
     id: 'moon', x: 610, y: 106, r: 46,
     diffs: [
       { type: 'colour', label: 'the moon', color: C.moonAlt },
-      { type: 'size', label: 'the moon', scale: 1.38 },
+      { type: 'size', label: 'the moon', scale: 1.55 },
       { type: 'position', label: 'the moon', dx: -52, dy: 26 }
     ],
     draw: function (ctx, o) {
@@ -396,7 +396,7 @@ function buildScene(rng) {
     id: 'lighthouse', x: 672, y: 356, r: 62,
     diffs: [
       { type: 'colour', label: 'the lighthouse bands', color: C.bandAlt },
-      { type: 'size', label: 'the lighthouse', scale: 0.8 },
+      { type: 'size', label: 'the lighthouse', scale: 0.7 },
       { type: 'position', label: 'the lighthouse', dx: -44, dy: 0 }
     ],
     draw: function (ctx, o) {
@@ -453,17 +453,17 @@ function buildScene(rng) {
   }
 
   var boatSpecs = [
-    { id: 'boat1', x: 150, y: 500, r: 54, sail: C.sail, hull: C.hull,
-      diffs: [{ type: 'colour', label: 'a sail', color: C.sailAlt }, { type: 'size', label: 'a boat', scale: 0.78 }] },
-    { id: 'boat2', x: 300, y: 548, r: 52, sail: C.sail, hull: C.hull,
+    { id: 'boat1', x: 150, y: 500, r: 54, hit: { x: 150, y: 465, r: 62 }, sail: C.sail, hull: C.hull,
+      diffs: [{ type: 'colour', label: 'a sail', color: C.sailAlt }, { type: 'size', label: 'a boat', scale: 0.68 }] },
+    { id: 'boat2', x: 270, y: 548, r: 52, hit: { x: 270, y: 513, r: 62 }, sail: C.sail, hull: C.hull,
       diffs: [{ type: 'position', label: 'a boat', dx: 56, dy: 8 }] },
-    { id: 'boat3', x: 560, y: 486, r: 52, sail: C.sail, hull: C.hull,
+    { id: 'boat3', x: 560, y: 486, r: 52, hit: { x: 560, y: 451, r: 62 }, sail: C.sail, hull: C.hull,
       diffs: [{ type: 'missing', label: 'a boat' }, { type: 'colour', label: 'a hull', color: C.hullAlt }] }
   ];
   for (i = 0; i < boatSpecs.length; i += 1) {
     (function (spec) {
       add({
-        id: spec.id, x: spec.x, y: spec.y, r: spec.r, diffs: spec.diffs,
+        id: spec.id, x: spec.x, y: spec.y, r: spec.r, hit: spec.hit, diffs: spec.diffs,
         draw: function (ctx, o) { boatDraw(ctx, o, spec); }
       });
     }(boatSpecs[i]));
@@ -479,14 +479,14 @@ function buildScene(rng) {
   }
 
   var buoySpecs = [
-    { id: 'buoy1', x: 92, y: 574, r: 32, color: C.buoy, diffs: [{ type: 'colour', label: 'a buoy', color: C.buoyAlt }, { type: 'missing', label: 'a buoy' }] },
-    { id: 'buoy2', x: 420, y: 586, r: 32, color: C.buoy, diffs: [{ type: 'size', label: 'a buoy', scale: 1.3 }, { type: 'position', label: 'a buoy', dx: 40, dy: -8 }] },
-    { id: 'buoy3', x: 648, y: 560, r: 30, color: C.buoyAlt, diffs: [{ type: 'missing', label: 'a buoy' }] }
+    { id: 'buoy1', x: 90, y: 548, r: 32, hit: { x: 90, y: 534, r: 44 }, color: C.buoy, diffs: [{ type: 'colour', label: 'a buoy', color: C.buoyAlt }, { type: 'missing', label: 'a buoy' }] },
+    { id: 'buoy2', x: 600, y: 554, r: 32, hit: { x: 600, y: 540, r: 44 }, color: C.buoy, diffs: [{ type: 'size', label: 'a buoy', scale: 1.5 }, { type: 'position', label: 'a buoy', dx: 40, dy: -8 }] },
+    { id: 'buoy3', x: 648, y: 560, r: 30, hit: { x: 648, y: 546, r: 42 }, color: C.buoyAlt, diffs: [{ type: 'missing', label: 'a buoy' }] }
   ];
   for (i = 0; i < buoySpecs.length; i += 1) {
     (function (spec) {
       add({
-        id: spec.id, x: spec.x, y: spec.y, r: spec.r, diffs: spec.diffs,
+        id: spec.id, x: spec.x, y: spec.y, r: spec.r, hit: spec.hit, diffs: spec.diffs,
         draw: function (ctx, o) { buoyDraw(ctx, o, spec); }
       });
     }(buoySpecs[i]));
@@ -509,7 +509,7 @@ function buildScene(rng) {
   });
 
   add({
-    id: 'pierlamp', x: 268, y: 520, r: 34,
+    id: 'pierlamp', x: 268, y: 520, r: 34, hit: { x: 268, y: 466, r: 50 },
     diffs: [{ type: 'colour', label: 'the pier lamp', color: C.lampGlassAlt }, { type: 'position', label: 'the pier lamp', dx: -70, dy: 0 }],
     draw: function (ctx, o) {
       var glass = (o && o.color) || C.lampGlass;
@@ -598,8 +598,8 @@ function buildScene(rng) {
   }
 
   add({
-    id: 'barrels', x: 336, y: 742, r: 44,
-    diffs: [{ type: 'size', label: 'the barrels', scale: 1.28 }, { type: 'position', label: 'the barrels', dx: -52, dy: 0 }],
+    id: 'barrels', x: 336, y: 742, r: 44, hit: { x: 336, y: 720, r: 44 },
+    diffs: [{ type: 'size', label: 'the barrels', scale: 1.45 }, { type: 'position', label: 'the barrels', dx: -52, dy: 0 }],
     draw: function (ctx) {
       barrel(ctx, -20);
       barrel(ctx, 18);
@@ -614,14 +614,14 @@ function buildScene(rng) {
   }
 
   var bollardSpecs = [
-    { id: 'bollard1', x: 300, y: 792, r: 26, diffs: [{ type: 'position', label: 'a bollard', dx: 42, dy: -6 }] },
-    { id: 'bollard2', x: 470, y: 796, r: 26, diffs: [{ type: 'missing', label: 'a bollard' }] },
-    { id: 'bollard3', x: 648, y: 784, r: 26, diffs: [{ type: 'position', label: 'a bollard', dx: -40, dy: 4 }] }
+    { id: 'bollard1', x: 300, y: 792, r: 26, hit: { x: 300, y: 780, r: 30 }, diffs: [{ type: 'position', label: 'a bollard', dx: 42, dy: -6 }] },
+    { id: 'bollard2', x: 470, y: 796, r: 26, hit: { x: 470, y: 784, r: 30 }, diffs: [{ type: 'missing', label: 'a bollard' }] },
+    { id: 'bollard3', x: 648, y: 784, r: 26, hit: { x: 648, y: 772, r: 30 }, diffs: [{ type: 'position', label: 'a bollard', dx: -40, dy: 4 }] }
   ];
   for (i = 0; i < bollardSpecs.length; i += 1) {
     (function (spec) {
       add({
-        id: spec.id, x: spec.x, y: spec.y, r: spec.r, diffs: spec.diffs,
+        id: spec.id, x: spec.x, y: spec.y, r: spec.r, hit: spec.hit, diffs: spec.diffs,
         draw: function (ctx) {
           rect(ctx, -9, -30, 18, 30); fill(ctx, C.bollard);
           ellipse(ctx, 0, -30, 9, 4); fill(ctx, '#5a6070');
@@ -641,7 +641,7 @@ function buildScene(rng) {
   });
 
   add({
-    id: 'cat', x: 206, y: 766, r: 34,
+    id: 'cat', x: 206, y: 766, r: 34, hit: { x: 206, y: 746, r: 44 },
     diffs: [{ type: 'missing', label: 'the cat' }, { type: 'position', label: 'the cat', dx: 58, dy: -4 }],
     draw: function (ctx) {
       ellipse(ctx, 0, -16, 20, 16); fill(ctx, C.cat);
@@ -668,7 +668,7 @@ function buildScene(rng) {
   });
 
   add({
-    id: 'lamppost', x: 700, y: 690, r: 44,
+    id: 'lamppost', x: 700, y: 690, r: 44, hit: { x: 700, y: 570, r: 54 },
     diffs: [{ type: 'colour', label: 'the lamp glass', color: C.lampGlassAlt }, { type: 'position', label: 'the lamp post', dx: -46, dy: 0 }],
     draw: function (ctx, o) {
       var glass = (o && o.color) || C.lampGlass;
@@ -823,9 +823,10 @@ function setup(seed) {
   game.variant = applyVariant(game.scene, game.diffs);
   for (var i = 0; i < game.diffs.length; i += 1) {
     var prop = findProp(game.diffs[i].prop);
-    game.diffs[i].x = prop.x;
-    game.diffs[i].y = prop.y;
-    game.diffs[i].r = prop.r;
+    var hit = prop.hit || prop;
+    game.diffs[i].x = hit.x;
+    game.diffs[i].y = hit.y;
+    game.diffs[i].r = hit.r;
   }
   game.found = [];
   game.score = 0;
@@ -926,6 +927,7 @@ function drawScene(g, variant) {
     var prop = g.scene.props[i];
     var o = variant ? variant[prop.id] : null;
     if (prop.extra && !o) continue;
+    if (o && o.present === false) continue;
     ctx.save();
     ctx.translate(prop.x + (o && o.dx || 0), prop.y + (o && o.dy || 0));
     var scale = (o && o.scale) || 1;
@@ -1008,13 +1010,15 @@ function draw() {
     ctx.restore();
 
     // frame, brighter on the picture the keyboard cursor is in
-    ctx.strokeStyle = panel === active && game.screen === 'play' ? C.marker : '#2c3550';
-    ctx.lineWidth = panel === active && game.screen === 'play' ? 3 : 2;
+    // frame: the picture the keyboard cursor is in gets a cool outline, so it
+    // never reads as one of the amber difference markers
+    ctx.strokeStyle = panel === active && game.screen === 'play' ? '#63c7d4' : '#2c3550';
+    ctx.lineWidth = panel === active && game.screen === 'play' ? 2.5 : 2;
     ctx.strokeRect(px, py, PANEL.w, PANEL.h);
   }
 
   // keyboard cursor
-  if (game.screen === 'play') {
+  if (game.screen === 'play' && !shotMode) {
     var cx = PANEL.x[active] + game.cursor.x;
     var cy = PANEL.y + game.cursor.y;
     ctx.strokeStyle = C.marker;
