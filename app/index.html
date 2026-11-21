@@ -1,0 +1,1241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harbour Hunt — a spot the difference game</title>
+<style>
+  :root {
+    --ink: #eef1f6;
+    --muted: #9aa3b5;
+    --panel: #171c2b;
+    --panel-2: #1f2536;
+    --line: #2c3550;
+    --accent: #f2a65a;
+    --accent-2: #63c7d4;
+    --good: #7fd1a8;
+    --bad: #e5635c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: #0b0e17;
+    color: var(--ink);
+    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+  header.hud {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 8px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .brand { font-weight: 700; letter-spacing: .3px; }
+  .brand span { color: var(--accent); }
+  .stats { display: flex; align-items: center; gap: 14px; flex: 1 1 auto; flex-wrap: wrap; }
+  .stat { display: flex; align-items: baseline; gap: 6px; }
+  .stat .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+  .stat .v { font-variant-numeric: tabular-nums; font-weight: 600; }
+  #combo { color: var(--accent-2); }
+  .bar { flex: 1 1 90px; height: 8px; background: #0e1220; border: 1px solid var(--line); border-radius: 99px; overflow: hidden; min-width: 70px; }
+  .bar i { display: block; height: 100%; width: 100%; background: var(--good); transition: width .2s linear, background .3s; }
+  .buttons { display: flex; gap: 8px; }
+  button {
+    font: inherit;
+    color: var(--ink);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 7px 12px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible, #view:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 2px; }
+  button kbd {
+    font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: #0e1220; border: 1px solid var(--line); border-radius: 4px; padding: 1px 4px; margin-left: 4px;
+  }
+  button[disabled] { opacity: .45; cursor: default; }
+  main { flex: 1 1 auto; position: relative; min-height: 0; display: flex; align-items: center; justify-content: center; }
+  #view { display: block; background: #0d1120; border-radius: 10px; }
+  #status { flex: 0 0 auto; margin: 0; padding: 5px 16px; background: var(--panel); border-top: 1px solid var(--line); color: var(--muted); min-height: 26px; }
+  #status b { color: var(--ink); }
+  .overlay {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(6, 9, 16, .72); backdrop-filter: blur(2px);
+  }
+  .overlay[hidden] { display: none; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 26px 30px; max-width: 560px; text-align: center; box-shadow: 0 18px 60px rgba(0,0,0,.5);
+  }
+  .card h1 { margin: 0 0 6px; font-size: 34px; }
+  .card h1 span { color: var(--accent); }
+  .card p { margin: 6px 0; color: var(--muted); }
+  .card .big { font-size: 20px; color: var(--ink); }
+  .card .score { font-size: 40px; font-weight: 700; color: var(--accent); margin: 10px 0; }
+  .card button { margin-top: 14px; font-size: 16px; padding: 10px 18px; }
+  .keys { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-top: 12px; color: var(--muted); font-size: 13px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+</style>
+</head>
+<body>
+<noscript><p style="padding: 20px">Harbour Hunt needs JavaScript.</p></noscript>
+
+<header class="hud">
+  <div class="brand">Harbour <span>Hunt</span></div>
+  <div class="stats">
+    <div class="stat"><span class="k">Found</span><span class="v" id="found">0 / 5</span></div>
+    <div class="stat"><span class="k">Left</span><span class="v" id="left">5</span></div>
+    <div class="stat"><span class="k">Time</span><span class="v" id="time">3:00</span></div>
+    <div class="bar"><i id="bar"></i></div>
+    <div class="stat"><span class="k">Score</span><span class="v" id="score">0</span></div>
+    <div class="stat"><span class="k">Combo</span><span class="v" id="combo">&times;1</span></div>
+  </div>
+  <div class="buttons">
+    <button id="hint" type="button">Hint<kbd>H</kbd></button>
+    <button id="restart" type="button">Restart<kbd>R</kbd></button>
+    <button id="newround" type="button">New round<kbd>N</kbd></button>
+  </div>
+</header>
+
+<main id="stage">
+  <canvas id="view" tabindex="0" role="application"
+    aria-label="Spot the difference. Two harbour pictures side by side. Move the cursor with the arrow keys, press Tab to change picture, Enter to mark a difference."></canvas>
+  <div class="overlay" id="overlay" hidden><div class="card" id="card"></div></div>
+</main>
+
+<p id="status" role="status" aria-live="polite">Loading the harbour&hellip;</p>
+<p class="sr-only">Arrow keys move the cursor, Tab switches between the two pictures, Enter marks a difference. H hints, R restarts, N starts a new round.</p>
+
+<script>
+'use strict';
+
+/* =========================================================================
+   Harbour Hunt — a spot the difference game in one file.
+   The scene is drawn twice from one seeded layout: the right hand picture
+   carries five differences (a colour, a missing thing, an extra thing, a
+   size and a position). Click or use the keyboard to mark them.
+   ========================================================================= */
+
+// ---------------------------------------------------------------- utilities
+var TAU = Math.PI * 2;
+
+function mulberry32(seed) {
+  var a = seed >>> 0;
+  return function random() {
+    a = (a + 0x6d2b79f5) | 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function makeRng(seed) {
+  var next = mulberry32(seed);
+  return {
+    next: next,
+    range: function (min, max) { return min + next() * (max - min); },
+    int: function (min, max) { return Math.floor(min + next() * (max - min + 1)); },
+    pick: function (list) { return list[Math.floor(next() * list.length)]; },
+    shuffle: function (list) {
+      var out = list.slice();
+      for (var i = out.length - 1; i > 0; i -= 1) {
+        var j = Math.floor(next() * (i + 1));
+        var t = out[i]; out[i] = out[j]; out[j] = t;
+      }
+      return out;
+    }
+  };
+}
+
+function clamp(value, low, high) { return value < low ? low : value > high ? high : value; }
+function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+// ---------------------------------------------------------------- the layout
+var SCENE = { w: 764, h: 812, horizon: 420, seaBottom: 610 };
+var FIELD = { w: 1600, h: 860 };
+var PANEL = { w: SCENE.w, h: SCENE.h, gap: 24, margin: 24 };
+PANEL.x = [PANEL.margin, PANEL.margin + PANEL.w + PANEL.gap];
+PANEL.y = PANEL.margin;
+
+var C = {
+  skyTop: '#121830', skyMid: '#2b3461', skyLow: '#7d4a51',
+  seaDeep: '#0f3a4c', sea: '#1d6a78', seaLight: '#3a9aa0', foam: '#a8ddd6',
+  quay: '#6b5847', quayDark: '#4e4034', plank: '#5a4a3c',
+  moon: '#ffd9a3', moonAlt: '#cfe6ff',
+  cloud: '#efe7f2', cloudAlt: '#f2c9c0',
+  bird: '#2a2f45',
+  hill: '#232a4a',
+  tower: '#f4efe4', band: '#d9503c', bandAlt: '#3f6b8a',
+  rock: '#3a3f52',
+  sail: '#f6f0dd', sailAlt: '#e8b04a',
+  hull: '#8a4a38', hullAlt: '#3f6b6a',
+  mast: '#4a3a2e',
+  buoy: '#d94f3d', buoyAlt: '#f2c94c',
+  hut: '#c8b394', roof: '#8a4b3c', door: '#3f6b6a', doorAlt: '#c8452f',
+  crate: '#a97c4f', crateLine: '#7d5a36',
+  barrel: '#7a5236', hoop: '#3b3f4a',
+  bollard: '#3b3f4a',
+  rope: '#c9a86a',
+  cat: '#26221f',
+  bench: '#5c4a38',
+  lamp: '#2f333d', lampGlass: '#ffd27a', lampGlassAlt: '#9fb4c8',
+  gull: '#f2efe6', beak: '#e0a13c',
+  star: '#cfe0ff',
+  marker: '#ffd166',
+  miss: '#e5635c'
+};
+
+// ------------------------------------------------------- canvas shape helpers
+function circle(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); }
+function ellipse(ctx, x, y, rx, ry) { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, TAU); }
+function rect(ctx, x, y, w, h) { ctx.beginPath(); ctx.rect(x, y, w, h); }
+function rrect(ctx, x, y, w, h, r) {
+  var k = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + k, y);
+  ctx.lineTo(x + w - k, y); ctx.arcTo(x + w, y, x + w, y + k, k);
+  ctx.lineTo(x + w, y + h - k); ctx.arcTo(x + w, y + h, x + w - k, y + h, k);
+  ctx.lineTo(x + k, y + h); ctx.arcTo(x, y + h, x, y + h - k, k);
+  ctx.lineTo(x, y + k); ctx.arcTo(x, y, x + k, y, k);
+  ctx.closePath();
+}
+function poly(ctx, pts) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (var i = 1; i < pts.length; i += 1) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+}
+function fill(ctx, colour) { ctx.fillStyle = colour; ctx.fill(); }
+function stroke(ctx, colour, width) { ctx.strokeStyle = colour; ctx.lineWidth = width; ctx.stroke(); }
+
+/* =========================================================================
+   The scene. Every picture is the same list of props drawn in order; a prop
+   reads its mutation from `o` (colour / scale / dx / dy / present) so the
+   right hand picture can differ. Props with `extra: true` are absent unless
+   the round's difference says they are there.
+   ========================================================================= */
+function buildScene(rng) {
+  var props = [];
+  var decor = { stars: [], waves: [] };
+  var i;
+
+  for (i = 0; i < 26; i += 1) {
+    decor.stars.push([rng.range(6, SCENE.w - 6), rng.range(6, 330), rng.range(0.8, 2.1), rng.range(0.2, 0.65)]);
+  }
+  for (i = 0; i < 34; i += 1) {
+    decor.waves.push([rng.range(0, SCENE.w), rng.range(428, 604), rng.range(16, 58), rng.range(0.08, 0.3)]);
+  }
+
+  function add(prop) { props.push(prop); return prop; }
+
+  // ------------------------------------------------------------- backdrop
+  add({
+    id: 'sky', x: 0, y: 0, r: 0, draw: function (ctx) {
+      var g = ctx.createLinearGradient(0, 0, 0, SCENE.horizon);
+      g.addColorStop(0, C.skyTop);
+      g.addColorStop(0.55, C.skyMid);
+      g.addColorStop(1, C.skyLow);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, SCENE.w, SCENE.horizon + 2);
+      for (var i = 0; i < decor.stars.length; i += 1) {
+        var s = decor.stars[i];
+        ctx.globalAlpha = s[3];
+        circle(ctx, s[0], s[1], s[2]);
+        fill(ctx, C.star);
+      }
+      ctx.globalAlpha = 1;
+    }
+  });
+
+  add({
+    id: 'constellation', x: 150, y: 96, r: 44, extra: false,
+    diffs: [{ type: 'extra', label: 'a new star' }],
+    draw: function (ctx, o) {
+      var pts = [[-40, -16], [-14, 10], [14, -24], [42, 6], [4, 32]];
+      ctx.globalAlpha = 0.5;
+      ctx.strokeStyle = C.star;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (var i = 1; i < pts.length; i += 1) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      for (i = 0; i < pts.length; i += 1) {
+        circle(ctx, pts[i][0], pts[i][1], 2.6);
+        fill(ctx, C.star);
+      }
+      if (o && o.present) {
+        circle(ctx, 28, 34, 5);
+        fill(ctx, '#fff4d0');
+        ctx.globalAlpha = 0.35;
+        circle(ctx, 28, 34, 11);
+        fill(ctx, C.moon);
+        ctx.globalAlpha = 1;
+      }
+    }
+  });
+
+  add({
+    id: 'moon', x: 610, y: 106, r: 46,
+    diffs: [
+      { type: 'colour', label: 'the moon', color: C.moonAlt },
+      { type: 'size', label: 'the moon', scale: 1.38 },
+      { type: 'position', label: 'the moon', dx: -52, dy: 26 }
+    ],
+    draw: function (ctx, o) {
+      var r = 30, col = (o && o.color) || C.moon;
+      ctx.globalAlpha = 0.16;
+      circle(ctx, 0, 0, r * 2.1); fill(ctx, col);
+      ctx.globalAlpha = 0.28;
+      circle(ctx, 0, 0, r * 1.5); fill(ctx, col);
+      ctx.globalAlpha = 1;
+      circle(ctx, 0, 0, r); fill(ctx, col);
+      ctx.globalAlpha = 0.22;
+      circle(ctx, -9, -6, 6); fill(ctx, '#8a6a3a');
+      circle(ctx, 8, 9, 4.4); fill(ctx, '#8a6a3a');
+      circle(ctx, 11, -12, 3.2); fill(ctx, '#8a6a3a');
+      ctx.globalAlpha = 1;
+    }
+  });
+
+  function cloudDraw(ctx, o, tone) {
+    var col = (o && o.color) || tone;
+    ctx.globalAlpha = 0.92;
+    ellipse(ctx, 0, 0, 46, 20); fill(ctx, col);
+    ellipse(ctx, -34, 9, 30, 15); fill(ctx, col);
+    ellipse(ctx, 36, 7, 32, 16); fill(ctx, col);
+    ellipse(ctx, 2, -15, 27, 16); fill(ctx, col);
+    ctx.globalAlpha = 1;
+  }
+
+  var cloudSpecs = [
+    { id: 'cloud1', x: 214, y: 152, r: 52, tone: C.cloud,
+      diffs: [{ type: 'missing', label: 'a cloud' }, { type: 'position', label: 'a cloud', dx: 66, dy: -18 }] },
+    { id: 'cloud2', x: 428, y: 92, r: 46, tone: C.cloud,
+      diffs: [{ type: 'missing', label: 'a cloud' }, { type: 'colour', label: 'a cloud', color: C.cloudAlt }] },
+    { id: 'cloud3', x: 556, y: 206, r: 50, tone: C.cloud,
+      diffs: [{ type: 'position', label: 'a cloud', dx: -60, dy: 22 }] },
+    { id: 'cloud4', x: 84, y: 248, r: 44, tone: C.cloud, extra: true,
+      diffs: [{ type: 'extra', label: 'an extra cloud' }] }
+  ];
+  for (i = 0; i < cloudSpecs.length; i += 1) {
+    (function (spec) {
+      add({
+        id: spec.id, x: spec.x, y: spec.y, r: spec.r, extra: !!spec.extra, diffs: spec.diffs,
+        draw: function (ctx, o) { cloudDraw(ctx, o, spec.tone); }
+      });
+    }(cloudSpecs[i]));
+  }
+
+  function birdDraw(ctx) {
+    ctx.strokeStyle = C.bird;
+    ctx.lineWidth = 2.6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-15, 0);
+    ctx.quadraticCurveTo(-7, -11, 0, 0);
+    ctx.quadraticCurveTo(7, -11, 15, 0);
+    ctx.stroke();
+  }
+
+  var birdSpecs = [
+    { id: 'bird1', x: 300, y: 190, r: 30, diffs: [{ type: 'missing', label: 'a bird' }, { type: 'position', label: 'a bird', dx: 44, dy: -22 }] },
+    { id: 'bird2', x: 362, y: 148, r: 28, diffs: [{ type: 'missing', label: 'a bird' }] },
+    { id: 'bird3', x: 472, y: 232, r: 28, diffs: [{ type: 'position', label: 'a bird', dx: -48, dy: 18 }] },
+    { id: 'bird4', x: 244, y: 112, r: 26, extra: true, diffs: [{ type: 'extra', label: 'an extra bird' }] }
+  ];
+  for (i = 0; i < birdSpecs.length; i += 1) {
+    (function (spec) {
+      add({
+        id: spec.id, x: spec.x, y: spec.y, r: spec.r, extra: !!spec.extra, diffs: spec.diffs,
+        draw: function (ctx) { birdDraw(ctx); }
+      });
+    }(birdSpecs[i]));
+  }
+
+  add({
+    id: 'headland', x: 0, y: 0, r: 0, draw: function (ctx) {
+      poly(ctx, [[0, SCENE.horizon + 2], [0, 392], [60, 372], [140, 398], [210, 368], [300, 396], [340, 420], [340, SCENE.horizon + 2]]);
+      fill(ctx, C.hill);
+    }
+  });
+
+  add({
+    id: 'sea', x: 0, y: 0, r: 0, draw: function (ctx) {
+      var g = ctx.createLinearGradient(0, SCENE.horizon, 0, SCENE.seaBottom);
+      g.addColorStop(0, C.seaLight);
+      g.addColorStop(0.35, C.sea);
+      g.addColorStop(1, C.seaDeep);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, SCENE.horizon, SCENE.w, SCENE.seaBottom - SCENE.horizon);
+      for (var i = 0; i < decor.waves.length; i += 1) {
+        var w = decor.waves[i];
+        ctx.globalAlpha = w[3];
+        ctx.strokeStyle = C.foam;
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(w[0] - w[2] / 2, w[1]);
+        ctx.lineTo(w[0] + w[2] / 2, w[1]);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+  });
+
+  add({
+    id: 'lighthouse', x: 672, y: 356, r: 62,
+    diffs: [
+      { type: 'colour', label: 'the lighthouse bands', color: C.bandAlt },
+      { type: 'size', label: 'the lighthouse', scale: 0.8 },
+      { type: 'position', label: 'the lighthouse', dx: -44, dy: 0 }
+    ],
+    draw: function (ctx, o) {
+      var band = (o && o.color) || C.band;
+      // rock
+      ellipse(ctx, 0, 64, 74, 22); fill(ctx, C.rock);
+      // light beam
+      ctx.globalAlpha = 0.13;
+      poly(ctx, [[0, -96], [-210, -140], [-210, -52]]); fill(ctx, C.lampGlass);
+      ctx.globalAlpha = 1;
+      // tower
+      var tower = function () {
+        poly(ctx, [[-26, 62], [26, 62], [17, -72], [-17, -72]]);
+      };
+      tower(); fill(ctx, C.tower);
+      ctx.save();
+      tower(); ctx.clip();
+      ctx.fillStyle = band;
+      ctx.fillRect(-30, -72, 60, 16);
+      ctx.fillRect(-30, -30, 60, 16);
+      ctx.fillRect(-30, 12, 60, 16);
+      ctx.restore();
+      // gallery, lamp room, dome
+      rect(ctx, -24, -90, 48, 18); fill(ctx, C.mast);
+      rect(ctx, -13, -120, 26, 30); fill(ctx, C.lampGlass);
+      ctx.strokeStyle = C.mast; ctx.lineWidth = 2;
+      ctx.strokeRect(-13, -120, 26, 30);
+      ctx.beginPath(); ctx.arc(0, -120, 14, Math.PI, 0); fill(ctx, C.band);
+      // door and windows
+      rrect(ctx, -9, 34, 18, 28, 5); fill(ctx, C.mast);
+      circle(ctx, 0, -50, 5); fill(ctx, C.mast);
+      circle(ctx, 0, -14, 5); fill(ctx, C.mast);
+    }
+  });
+
+  function boatDraw(ctx, o, spec) {
+    var sail = (o && o.color) || spec.sail;
+    // hull
+    poly(ctx, [[-48, 0], [48, 0], [32, 18], [-32, 18]]); fill(ctx, spec.hull);
+    rect(ctx, -48, -3, 96, 5); fill(ctx, C.mast);
+    // mast
+    ctx.strokeStyle = C.mast; ctx.lineWidth = 3.4;
+    ctx.beginPath(); ctx.moveTo(0, -2); ctx.lineTo(0, -88); ctx.stroke();
+    // main sail
+    poly(ctx, [[4, -84], [4, -8], [38, -8]]); fill(ctx, sail);
+    // jib
+    poly(ctx, [[-4, -74], [-4, -8], [-30, -8]]); fill(ctx, sail);
+    ctx.globalAlpha = 0.55; stroke(ctx, C.mast, 1.4); ctx.globalAlpha = 1;
+    // flag
+    poly(ctx, [[0, -88], [16, -83], [0, -78]]); fill(ctx, C.band);
+    // portholes
+    circle(ctx, -18, 8, 3.2); fill(ctx, C.mast);
+    circle(ctx, 18, 8, 3.2); fill(ctx, C.mast);
+  }
+
+  var boatSpecs = [
+    { id: 'boat1', x: 150, y: 500, r: 54, sail: C.sail, hull: C.hull,
+      diffs: [{ type: 'colour', label: 'a sail', color: C.sailAlt }, { type: 'size', label: 'a boat', scale: 0.78 }] },
+    { id: 'boat2', x: 300, y: 548, r: 52, sail: C.sail, hull: C.hull,
+      diffs: [{ type: 'position', label: 'a boat', dx: 56, dy: 8 }] },
+    { id: 'boat3', x: 560, y: 486, r: 52, sail: C.sail, hull: C.hull,
+      diffs: [{ type: 'missing', label: 'a boat' }, { type: 'colour', label: 'a hull', color: C.hullAlt }] }
+  ];
+  for (i = 0; i < boatSpecs.length; i += 1) {
+    (function (spec) {
+      add({
+        id: spec.id, x: spec.x, y: spec.y, r: spec.r, diffs: spec.diffs,
+        draw: function (ctx, o) { boatDraw(ctx, o, spec); }
+      });
+    }(boatSpecs[i]));
+  }
+
+  function buoyDraw(ctx, o, spec) {
+    var body = (o && o.color) || spec.color;
+    rect(ctx, -13, -28, 26, 34); fill(ctx, body);
+    ctx.beginPath(); ctx.arc(0, 6, 13, 0, Math.PI); fill(ctx, body);
+    rect(ctx, -13, -12, 26, 8); fill(ctx, '#f6f0dd');
+    rect(ctx, -2.5, -46, 5, 20); fill(ctx, C.mast);
+    circle(ctx, 0, -48, 4); fill(ctx, C.mast);
+  }
+
+  var buoySpecs = [
+    { id: 'buoy1', x: 92, y: 574, r: 32, color: C.buoy, diffs: [{ type: 'colour', label: 'a buoy', color: C.buoyAlt }, { type: 'missing', label: 'a buoy' }] },
+    { id: 'buoy2', x: 420, y: 586, r: 32, color: C.buoy, diffs: [{ type: 'size', label: 'a buoy', scale: 1.3 }, { type: 'position', label: 'a buoy', dx: 40, dy: -8 }] },
+    { id: 'buoy3', x: 648, y: 560, r: 30, color: C.buoyAlt, diffs: [{ type: 'missing', label: 'a buoy' }] }
+  ];
+  for (i = 0; i < buoySpecs.length; i += 1) {
+    (function (spec) {
+      add({
+        id: spec.id, x: spec.x, y: spec.y, r: spec.r, diffs: spec.diffs,
+        draw: function (ctx, o) { buoyDraw(ctx, o, spec); }
+      });
+    }(buoySpecs[i]));
+  }
+
+  add({
+    id: 'pier', x: 0, y: 0, r: 0, draw: function (ctx) {
+      // posts
+      ctx.fillStyle = C.mast;
+      var xs = [30, 110, 190, 268];
+      for (var i = 0; i < xs.length; i += 1) ctx.fillRect(xs[i] - 5, 588, 10, 74);
+      // deck
+      rect(ctx, 0, 576, 292, 16); fill(ctx, C.quay);
+      rect(ctx, 0, 576, 292, 5); fill(ctx, C.plank);
+      ctx.strokeStyle = C.plank; ctx.lineWidth = 1.5;
+      for (i = 1; i < 6; i += 1) {
+        ctx.beginPath(); ctx.moveTo(i * 48, 578); ctx.lineTo(i * 48, 590); ctx.stroke();
+      }
+    }
+  });
+
+  add({
+    id: 'pierlamp', x: 268, y: 520, r: 34,
+    diffs: [{ type: 'colour', label: 'the pier lamp', color: C.lampGlassAlt }, { type: 'position', label: 'the pier lamp', dx: -70, dy: 0 }],
+    draw: function (ctx, o) {
+      var glass = (o && o.color) || C.lampGlass;
+      ctx.strokeStyle = C.lamp; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(0, 58); ctx.lineTo(0, -34); ctx.stroke();
+      ctx.globalAlpha = 0.22; circle(ctx, 0, -44, 22); fill(ctx, glass); ctx.globalAlpha = 1;
+      rect(ctx, -9, -58, 18, 22); fill(ctx, glass);
+      poly(ctx, [[-12, -58], [12, -58], [0, -72]]); fill(ctx, C.lamp);
+    }
+  });
+
+  add({
+    id: 'quay', x: 0, y: 0, r: 0, draw: function (ctx) {
+      rect(ctx, 0, SCENE.seaBottom, SCENE.w, SCENE.h - SCENE.seaBottom); fill(ctx, C.quay);
+      rect(ctx, 0, SCENE.seaBottom, SCENE.w, 14); fill(ctx, C.quayDark);
+      ctx.strokeStyle = C.plank; ctx.lineWidth = 1.5;
+      for (var y = SCENE.seaBottom + 34; y < SCENE.h; y += 30) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(SCENE.w, y); ctx.stroke();
+      }
+    }
+  });
+
+  add({
+    id: 'boathouse', x: 430, y: 536, r: 82,
+    diffs: [
+      { type: 'colour', label: 'the boathouse door', color: C.doorAlt },
+      { type: 'missing', label: 'the boathouse' },
+      { type: 'position', label: 'the boathouse', dx: 46, dy: 0 }
+    ],
+    draw: function (ctx, o) {
+      var door = (o && o.color) || C.door;
+      rect(ctx, -96, -16, 192, 78); fill(ctx, C.hut);
+      poly(ctx, [[-112, -16], [112, -16], [0, -72]]); fill(ctx, C.roof);
+      rect(ctx, 52, -64, 20, 34); fill(ctx, C.roof);
+      rrect(ctx, -24, 22, 48, 40, 6); fill(ctx, door);
+      rrect(ctx, 34, 2, 40, 34, 4); fill(ctx, C.lampGlass);
+      ctx.strokeStyle = C.mast; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(54, 2); ctx.lineTo(54, 36); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(34, 19); ctx.lineTo(74, 19); ctx.stroke();
+      ctx.strokeStyle = C.quayDark; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-80, 62); ctx.lineTo(80, 62); ctx.stroke();
+    }
+  });
+
+  add({
+    id: 'pole', x: 630, y: 552, r: 0, draw: function (ctx) {
+      ctx.fillStyle = C.mast; ctx.fillRect(-4, -62, 8, 124);
+    }
+  });
+
+  add({
+    id: 'bunting', x: 530, y: 492, r: 58,
+    diffs: [{ type: 'missing', label: 'the bunting' }, { type: 'colour', label: 'the bunting', color: C.buoyAlt }],
+    draw: function (ctx, o) {
+      var col = (o && o.color) || C.buoy;
+      ctx.strokeStyle = C.mast; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-100, -22); ctx.quadraticCurveTo(0, 34, 100, -44); ctx.stroke();
+      for (var i = 0; i < 8; i += 1) {
+        var t = (i + 0.5) / 8;
+        var x = -100 + 200 * t;
+        var y = (1 - t) * (1 - t) * -22 + 2 * (1 - t) * t * 34 + t * t * -44;
+        poly(ctx, [[x - 9, y], [x + 9, y], [x, y + 17]]);
+        fill(ctx, i % 2 === 0 ? col : C.sail);
+      }
+    }
+  });
+
+  add({
+    id: 'crates', x: 250, y: 700, r: 52,
+    diffs: [{ type: 'extra', label: 'an extra crate' }],
+    extra: true,
+    draw: function (ctx, o) {
+      if (!o || !o.present) return;
+      crate(ctx, -22, -30);
+      crate(ctx, 24, -30);
+      crate(ctx, 0, -72);
+    }
+  });
+
+  function crate(ctx, x, y) {
+    rect(ctx, x, y, 44, 42); fill(ctx, C.crate);
+    ctx.strokeStyle = C.crateLine; ctx.lineWidth = 3;
+    ctx.strokeRect(x, y, 44, 42);
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 44, y + 42); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + 44, y); ctx.lineTo(x, y + 42); ctx.stroke();
+  }
+
+  add({
+    id: 'barrels', x: 336, y: 742, r: 44,
+    diffs: [{ type: 'size', label: 'the barrels', scale: 1.28 }, { type: 'position', label: 'the barrels', dx: -52, dy: 0 }],
+    draw: function (ctx) {
+      barrel(ctx, -20);
+      barrel(ctx, 18);
+    }
+  });
+
+  function barrel(ctx, x) {
+    rrect(ctx, x, -46, 30, 46, 9); fill(ctx, C.barrel);
+    ctx.fillStyle = C.hoop;
+    ctx.fillRect(x, -38, 30, 4);
+    ctx.fillRect(x, -12, 30, 4);
+  }
+
+  var bollardSpecs = [
+    { id: 'bollard1', x: 300, y: 792, r: 26, diffs: [{ type: 'position', label: 'a bollard', dx: 42, dy: -6 }] },
+    { id: 'bollard2', x: 470, y: 796, r: 26, diffs: [{ type: 'missing', label: 'a bollard' }] },
+    { id: 'bollard3', x: 648, y: 784, r: 26, diffs: [{ type: 'position', label: 'a bollard', dx: -40, dy: 4 }] }
+  ];
+  for (i = 0; i < bollardSpecs.length; i += 1) {
+    (function (spec) {
+      add({
+        id: spec.id, x: spec.x, y: spec.y, r: spec.r, diffs: spec.diffs,
+        draw: function (ctx) {
+          rect(ctx, -9, -30, 18, 30); fill(ctx, C.bollard);
+          ellipse(ctx, 0, -30, 9, 4); fill(ctx, '#5a6070');
+          rect(ctx, -12, -6, 24, 6); fill(ctx, '#2c3038');
+        }
+      });
+    }(bollardSpecs[i]));
+  }
+
+  add({
+    id: 'rope', x: 420, y: 784, r: 28,
+    diffs: [{ type: 'missing', label: 'the rope coil' }],
+    draw: function (ctx) {
+      ctx.strokeStyle = C.rope; ctx.lineWidth = 4;
+      for (var r = 6; r <= 18; r += 6) { circle(ctx, 0, 0, r); ctx.stroke(); }
+    }
+  });
+
+  add({
+    id: 'cat', x: 206, y: 766, r: 34,
+    diffs: [{ type: 'missing', label: 'the cat' }, { type: 'position', label: 'the cat', dx: 58, dy: -4 }],
+    draw: function (ctx) {
+      ellipse(ctx, 0, -16, 20, 16); fill(ctx, C.cat);
+      circle(ctx, 14, -32, 10); fill(ctx, C.cat);
+      poly(ctx, [[8, -40], [12, -50], [16, -40]]); fill(ctx, C.cat);
+      poly(ctx, [[16, -40], [21, -49], [24, -39]]); fill(ctx, C.cat);
+      ctx.strokeStyle = C.cat; ctx.lineWidth = 5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-18, -10); ctx.quadraticCurveTo(-34, -6, -30, -26); ctx.stroke();
+      ellipse(ctx, 0, 0, 24, 5); fill(ctx, 'rgba(0,0,0,.25)');
+    }
+  });
+
+  add({
+    id: 'bench', x: 560, y: 730, r: 48,
+    diffs: [{ type: 'missing', label: 'the bench' }, { type: 'position', label: 'the bench', dx: -56, dy: 0 }],
+    draw: function (ctx) {
+      rect(ctx, -52, -30, 104, 12); fill(ctx, C.bench);
+      rect(ctx, -52, -52, 104, 10); fill(ctx, C.bench);
+      rect(ctx, -46, -42, 8, 12); fill(ctx, C.bench);
+      rect(ctx, 38, -42, 8, 12); fill(ctx, C.bench);
+      rect(ctx, -44, -18, 8, 18); fill(ctx, C.mast);
+      rect(ctx, 36, -18, 8, 18); fill(ctx, C.mast);
+    }
+  });
+
+  add({
+    id: 'lamppost', x: 700, y: 690, r: 44,
+    diffs: [{ type: 'colour', label: 'the lamp glass', color: C.lampGlassAlt }, { type: 'position', label: 'the lamp post', dx: -46, dy: 0 }],
+    draw: function (ctx, o) {
+      var glass = (o && o.color) || C.lampGlass;
+      ctx.fillStyle = C.lamp; ctx.fillRect(-4, -120, 8, 120);
+      ctx.beginPath(); ctx.arc(0, -120, 12, Math.PI, 0); fill(ctx, C.lamp);
+      ctx.globalAlpha = 0.2; circle(ctx, 0, -104, 30); fill(ctx, glass); ctx.globalAlpha = 1;
+      rect(ctx, -10, -118, 20, 24); fill(ctx, glass);
+      poly(ctx, [[-13, -118], [13, -118], [0, -132]]); fill(ctx, C.lamp);
+    }
+  });
+
+  add({
+    id: 'gull1', x: 352, y: 646, r: 26,
+    diffs: [{ type: 'missing', label: 'a gull' }, { type: 'position', label: 'a gull', dx: 46, dy: 12 }],
+    draw: function (ctx) {
+      ellipse(ctx, 0, -8, 14, 9); fill(ctx, C.gull);
+      circle(ctx, 12, -16, 6); fill(ctx, C.gull);
+      poly(ctx, [[17, -17], [25, -15], [17, -13]]); fill(ctx, C.beak);
+      ctx.strokeStyle = C.beak; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-4, 0); ctx.lineTo(-4, 8); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(4, 0); ctx.lineTo(4, 8); ctx.stroke();
+    }
+  });
+
+  add({
+    id: 'gull2', x: 606, y: 700, r: 26, extra: true,
+    diffs: [{ type: 'extra', label: 'an extra gull' }],
+    draw: function (ctx) {
+      ellipse(ctx, 0, -8, 14, 9); fill(ctx, C.gull);
+      circle(ctx, -12, -16, 6); fill(ctx, C.gull);
+      poly(ctx, [[-17, -17], [-25, -15], [-17, -13]]); fill(ctx, C.beak);
+      ctx.strokeStyle = C.beak; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-4, 0); ctx.lineTo(-4, 8); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(4, 0); ctx.lineTo(4, 8); ctx.stroke();
+    }
+  });
+
+  return { props: props, decor: decor };
+}
+
+/* =========================================================================
+   Differences. One of each kind — a colour, a missing thing, an extra thing,
+   a size and a position — on five different props.
+   ========================================================================= */
+var DIFF_TYPES = ['colour', 'missing', 'extra', 'size', 'position'];
+
+function pickDifferences(scene, rng) {
+  var candidates = [];
+  for (var i = 0; i < scene.props.length; i += 1) {
+    var prop = scene.props[i];
+    if (!prop.diffs) continue;
+    for (var j = 0; j < prop.diffs.length; j += 1) {
+      var diff = prop.diffs[j];
+      candidates.push({
+        prop: prop.id, type: diff.type, label: diff.label,
+        color: diff.color, scale: diff.scale, dx: diff.dx || 0, dy: diff.dy || 0
+      });
+    }
+  }
+  var order = rng.shuffle(candidates);
+  var chosen = [];
+  var usedProps = {};
+  var usedTypes = {};
+  var t, k;
+  for (t = 0; t < DIFF_TYPES.length; t += 1) {
+    for (k = 0; k < order.length; k += 1) {
+      var cand = order[k];
+      if (cand.type !== DIFF_TYPES[t] || usedProps[cand.prop]) continue;
+      chosen.push(cand);
+      usedProps[cand.prop] = true;
+      usedTypes[cand.type] = true;
+      break;
+    }
+  }
+  // A layout without a candidate of some kind (never with the shipped scene)
+  // falls back to allowing a second difference on one prop rather than a short round.
+  for (t = 0; t < DIFF_TYPES.length && chosen.length < DIFF_TYPES.length; t += 1) {
+    if (usedTypes[DIFF_TYPES[t]]) continue;
+    for (k = 0; k < order.length; k += 1) {
+      if (order[k].type === DIFF_TYPES[t]) { chosen.push(order[k]); break; }
+    }
+  }
+  return chosen.sort(function (a, b) { return DIFF_TYPES.indexOf(a.type) - DIFF_TYPES.indexOf(b.type); });
+}
+
+function applyVariant(scene, diffs) {
+  var variant = {};
+  for (var i = 0; i < diffs.length; i += 1) {
+    var diff = diffs[i];
+    var entry = variant[diff.prop] || {};
+    if (diff.type === 'colour') entry.color = diff.color;
+    else if (diff.type === 'size') entry.scale = diff.scale;
+    else if (diff.type === 'position') { entry.dx = diff.dx; entry.dy = diff.dy; }
+    else if (diff.type === 'missing') entry.present = false;
+    else if (diff.type === 'extra') entry.present = true;
+    variant[diff.prop] = entry;
+  }
+  return variant;
+}
+
+function diffRegion(diff) {
+  var scale = diff.type === 'size' ? diff.scale : 1;
+  return { x: diff.x + (diff.type === 'position' ? diff.dx : 0), y: diff.y + (diff.type === 'position' ? diff.dy : 0), r: diff.r * scale };
+}
+
+/* =========================================================================
+   Game state.
+   ========================================================================= */
+var ROUND_SECONDS = 180;
+var COMBO_WINDOW = 8000;
+var HINT_COST = 50;
+var MISS_COST = 25;
+
+var params = new URLSearchParams(window.location.search);
+var shotMode = params.get('shot');
+var shotSeed = Number.parseInt(params.get('seed') || '', 10);
+
+var canvas = document.getElementById('view');
+var ctx = canvas.getContext('2d');
+var stage = document.getElementById('stage');
+var overlay = document.getElementById('overlay');
+var card = document.getElementById('card');
+var statusEl = document.getElementById('status');
+var hud = {
+  found: document.getElementById('found'),
+  left: document.getElementById('left'),
+  time: document.getElementById('time'),
+  bar: document.getElementById('bar'),
+  score: document.getElementById('score'),
+  combo: document.getElementById('combo')
+};
+
+var game = {
+  seed: 0, scene: null, diffs: [], variant: {},
+  found: [], score: 0, combo: 1, lastFind: 0,
+  remaining: ROUND_SECONDS, screen: 'title',
+  cursor: { panel: 0, x: SCENE.w / 2, y: SCENE.h / 2 },
+  hint: null, hintUntil: 0, hintReadyAt: 0,
+  miss: null, missUntil: 0,
+  pointer: true
+};
+
+function seedOf() {
+  if (Number.isInteger(shotSeed)) return shotSeed;
+  return Math.floor(Math.random() * 4294967296);
+}
+
+function setup(seed) {
+  game.seed = seed;
+  game.scene = buildScene(makeRng(seed));
+  game.diffs = pickDifferences(game.scene, makeRng(seed ^ 0x9e3779b9));
+  game.variant = applyVariant(game.scene, game.diffs);
+  for (var i = 0; i < game.diffs.length; i += 1) {
+    var prop = findProp(game.diffs[i].prop);
+    game.diffs[i].x = prop.x;
+    game.diffs[i].y = prop.y;
+    game.diffs[i].r = prop.r;
+  }
+  game.found = [];
+  game.score = 0;
+  game.combo = 1;
+  game.lastFind = 0;
+  game.remaining = ROUND_SECONDS;
+  game.hint = null;
+  game.miss = null;
+}
+
+function findProp(id) {
+  for (var i = 0; i < game.scene.props.length; i += 1) if (game.scene.props[i].id === id) return game.scene.props[i];
+  return null;
+}
+
+function startPlay() {
+  game.screen = 'play';
+  overlay.hidden = true;
+  canvas.focus();
+  say('Find the five differences. Click one, or use the arrow keys and Enter.');
+}
+
+function restart() {
+  setup(game.seed);
+  game.screen = 'play';
+  overlay.hidden = true;
+  say('Same harbour, fresh eyes. Five differences.');
+  canvas.focus();
+}
+
+function newRound() {
+  setup(seedOf());
+  game.screen = 'play';
+  overlay.hidden = true;
+  say('A new harbour. Five new differences.');
+  canvas.focus();
+}
+
+function timeUp() {
+  game.screen = 'timeup';
+  showCard(
+    'Time up',
+    '<p class="big">The tide came in with <b>' + (game.diffs.length - game.found.length) + '</b> still hidden.</p>' +
+    '<p class="score">' + game.score + '</p>' +
+    '<p>Press <kbd>N</kbd> for a new round.</p>',
+    'New round',
+    newRound
+  );
+}
+
+function win() {
+  game.screen = 'won';
+  var used = Math.round(ROUND_SECONDS - game.remaining);
+  showCard(
+    'All five found',
+    '<p class="big">Every difference marked in <b>' + Math.floor(used / 60) + ':' + pad2(used % 60) + '</b>.</p>' +
+    '<p class="score">' + game.score + '</p>' +
+    '<p>Press <kbd>N</kbd> for a new round.</p>',
+    'New round',
+    newRound
+  );
+}
+
+var cardButton = null;
+function showCard(title, body, buttonLabel, onClick) {
+  card.innerHTML = '<h1>' + title + '</h1>' + body;
+  if (buttonLabel) {
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = buttonLabel;
+    button.addEventListener('click', function () { button.blur(); onClick(); });
+    card.appendChild(button);
+    cardButton = button;
+  } else {
+    cardButton = null;
+  }
+  overlay.hidden = false;
+}
+
+function showTitle() {
+  game.screen = 'title';
+  showCard(
+    'Harbour <span>Hunt</span>',
+    '<p class="big">Two pictures of the same harbour at dusk. Five things are not the same.</p>' +
+    '<p>Click a difference in either picture, or move the cursor with the arrow keys and press Enter.</p>' +
+    '<div class="keys"><span>&larr;&rarr;&uarr;&darr; move</span><span>Tab switch picture</span><span>Enter mark</span>' +
+    '<span>H hint</span><span>R restart</span><span>N new round</span></div>',
+    'Start hunting',
+    startPlay
+  );
+}
+
+function say(message) { statusEl.innerHTML = message; }
+
+/* ---------------------------------------------------------------- drawing */
+function drawScene(g, variant) {
+  for (var i = 0; i < g.scene.props.length; i += 1) {
+    var prop = g.scene.props[i];
+    var o = variant ? variant[prop.id] : null;
+    if (prop.extra && !o) continue;
+    ctx.save();
+    ctx.translate(prop.x + (o && o.dx || 0), prop.y + (o && o.dy || 0));
+    var scale = (o && o.scale) || 1;
+    if (scale !== 1) ctx.scale(scale, scale);
+    prop.draw(ctx, o);
+    ctx.restore();
+  }
+}
+
+function drawMarker(x, y, r) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-0.1);
+  ctx.strokeStyle = C.marker;
+  ctx.lineWidth = 4.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r, r * 0.85, 0, 0, TAU);
+  ctx.stroke();
+  ctx.globalAlpha = 0.35;
+  ctx.lineWidth = 9;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r, r * 0.85, 0, 0, TAU);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function draw() {
+  var scale = canvas.width / FIELD.w;
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  ctx.fillStyle = '#0d1120';
+  ctx.fillRect(0, 0, FIELD.w, FIELD.h);
+
+  var now = performance.now();
+  var active = game.cursor.panel;
+
+  for (var panel = 0; panel < 2; panel += 1) {
+    var px = PANEL.x[panel];
+    var py = PANEL.y;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(px, py, PANEL.w, PANEL.h);
+    ctx.clip();
+    ctx.translate(px, py);
+    drawScene(game, panel === 1 ? game.variant : null);
+
+    // found markers, in both pictures
+    for (var i = 0; i < game.diffs.length; i += 1) {
+      var diff = game.diffs[i];
+      if (game.found.indexOf(diff) === -1) continue;
+      var region = diffRegion(diff);
+      drawMarker(region.x, region.y, region.r);
+    }
+
+    // hint pulse
+    if (game.hint && now < game.hintUntil) {
+      var pulse = (now % 600) / 600;
+      var hr = diffRegion(game.hint);
+      ctx.globalAlpha = 0.75 * (1 - pulse);
+      ctx.strokeStyle = C.marker;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(hr.x, hr.y, hr.r + pulse * 26, 0, TAU);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // miss cross
+    if (game.miss && now < game.missUntil && game.miss.panel === panel) {
+      var m = game.miss;
+      ctx.strokeStyle = C.miss;
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      var s = 12;
+      ctx.beginPath();
+      ctx.moveTo(m.x - s, m.y - s); ctx.lineTo(m.x + s, m.y + s);
+      ctx.moveTo(m.x + s, m.y - s); ctx.lineTo(m.x - s, m.y + s);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // frame, brighter on the picture the keyboard cursor is in
+    ctx.strokeStyle = panel === active && game.screen === 'play' ? C.marker : '#2c3550';
+    ctx.lineWidth = panel === active && game.screen === 'play' ? 3 : 2;
+    ctx.strokeRect(px, py, PANEL.w, PANEL.h);
+  }
+
+  // keyboard cursor
+  if (game.screen === 'play') {
+    var cx = PANEL.x[active] + game.cursor.x;
+    var cy = PANEL.y + game.cursor.y;
+    ctx.strokeStyle = C.marker;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 17, 0, TAU);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3, 0, TAU);
+    fill(ctx, C.marker);
+  }
+}
+
+/* ------------------------------------------------------------------ input */
+function eventPoint(event) {
+  var rect = canvas.getBoundingClientRect();
+  return {
+    x: (event.clientX - rect.left) * (FIELD.w / rect.width),
+    y: (event.clientY - rect.top) * (FIELD.h / rect.height)
+  };
+}
+
+function panelAt(x, y) {
+  for (var panel = 0; panel < 2; panel += 1) {
+    if (x >= PANEL.x[panel] && x < PANEL.x[panel] + PANEL.w && y >= PANEL.y && y < PANEL.y + PANEL.h) {
+      return { panel: panel, x: x - PANEL.x[panel], y: y - PANEL.y };
+    }
+  }
+  return null;
+}
+
+function markFound(diff) {
+  game.found.push(diff);
+  var now = performance.now();
+  game.score += 100 * game.combo;
+  game.combo = Math.min(5, game.combo + 1);
+  game.lastFind = now;
+  var left = game.diffs.length - game.found.length;
+  say('Found: <b>' + diff.label + '</b>. ' + (left === 0 ? 'That is the last one.' : left + ' still hidden.'));
+  if (left === 0) win();
+}
+
+function missAt(point) {
+  game.score = Math.max(0, game.score - MISS_COST);
+  game.combo = 1;
+  game.miss = { panel: point.panel, x: point.x, y: point.y };
+  game.missUntil = performance.now() + 450;
+  say('Nothing there. &minus;' + MISS_COST + '.');
+}
+
+function selectAt(panel, x, y) {
+  if (game.screen !== 'play') return;
+  for (var i = 0; i < game.diffs.length; i += 1) {
+    var diff = game.diffs[i];
+    if (game.found.indexOf(diff) !== -1) continue;
+    var region = diffRegion(diff);
+    var dx = x - region.x;
+    var dy = y - region.y;
+    if (dx * dx + dy * dy <= region.r * region.r) {
+      markFound(diff);
+      return;
+    }
+  }
+  missAt({ panel: panel, x: x, y: y });
+}
+
+canvas.addEventListener('pointerdown', function (event) {
+  var point = eventPoint(event);
+  var hit = panelAt(point.x, point.y);
+  if (!hit) return;
+  game.pointer = true;
+  selectAt(hit.panel, hit.x, hit.y);
+});
+
+function moveCursor(dx, dy) {
+  game.pointer = false;
+  game.cursor.x = clamp(game.cursor.x + dx, 6, SCENE.w - 6);
+  game.cursor.y = clamp(game.cursor.y + dy, 6, SCENE.h - 6);
+}
+
+function switchPanel() {
+  game.pointer = false;
+  game.cursor.panel = game.cursor.panel === 0 ? 1 : 0;
+}
+
+window.addEventListener('keydown', function (event) {
+  var code = event.code;
+  if (code === 'Tab') {
+    event.preventDefault();
+    switchPanel();
+    return;
+  }
+  if (code === 'ArrowLeft' || code === 'ArrowRight' || code === 'ArrowUp' || code === 'ArrowDown') {
+    event.preventDefault();
+    var step = event.shiftKey ? 40 : 14;
+    if (code === 'ArrowLeft') moveCursor(-step, 0);
+    else if (code === 'ArrowRight') moveCursor(step, 0);
+    else if (code === 'ArrowUp') moveCursor(0, -step);
+    else moveCursor(0, step);
+    return;
+  }
+  if (code === 'Enter' || code === 'Space') {
+    event.preventDefault();
+    if (game.screen === 'play') selectAt(game.cursor.panel, game.cursor.x, game.cursor.y);
+    else if (cardButton) cardButton.click();
+    return;
+  }
+  if (code === 'KeyH') { hint(); return; }
+  if (code === 'KeyR') { if (game.screen !== 'title') restart(); return; }
+  if (code === 'KeyN') { newRound(); return; }
+});
+
+document.getElementById('hint').addEventListener('click', function (e) { e.currentTarget.blur(); hint(); });
+document.getElementById('restart').addEventListener('click', function (e) { e.currentTarget.blur(); if (game.screen !== 'title') restart(); });
+document.getElementById('newround').addEventListener('click', function (e) { e.currentTarget.blur(); newRound(); });
+
+function hint() {
+  if (game.screen !== 'play') return;
+  var now = performance.now();
+  if (now < game.hintReadyAt) { say('The hint is catching its breath.'); return; }
+  var pool = [];
+  for (var i = 0; i < game.diffs.length; i += 1) if (game.found.indexOf(game.diffs[i]) === -1) pool.push(game.diffs[i]);
+  if (pool.length === 0) return;
+  game.score = Math.max(0, game.score - HINT_COST);
+  game.hint = pool[Math.floor(Math.random() * pool.length)];
+  game.hintUntil = now + 1500;
+  game.hintReadyAt = now + 6000;
+  say('Something near ' + game.hint.label + ' is not the same. &minus;' + HINT_COST + '.');
+}
+
+/* ------------------------------------------------------------------- loop */
+var hudCache = '';
+function updateHud() {
+  var found = game.found.length;
+  var total = game.diffs.length;
+  var seconds = Math.max(0, Math.ceil(game.remaining));
+  var text = Math.floor(seconds / 60) + ':' + pad2(seconds % 60);
+  var pct = clamp((game.remaining / ROUND_SECONDS) * 100, 0, 100);
+  var signature = found + '|' + total + '|' + text + '|' + game.score + '|' + game.combo + '|' + Math.round(pct);
+  if (signature === hudCache) return;
+  hudCache = signature;
+  hud.found.textContent = found + ' / ' + total;
+  hud.left.textContent = String(total - found);
+  hud.time.textContent = text;
+  hud.score.textContent = String(game.score);
+  hud.combo.innerHTML = '&times;' + game.combo;
+  hud.bar.style.width = pct + '%';
+  hud.bar.style.background = pct > 50 ? 'var(--good)' : pct > 22 ? 'var(--accent)' : 'var(--bad)';
+}
+
+function resize() {
+  var availW = stage.clientWidth - 12;
+  var availH = stage.clientHeight - 12;
+  var scale = Math.min(availW / FIELD.w, availH / FIELD.h);
+  var cssW = Math.max(200, Math.floor(FIELD.w * scale));
+  var cssH = Math.max(150, Math.floor(FIELD.h * scale));
+  var ratio = window.devicePixelRatio || 1;
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  canvas.width = Math.round(cssW * ratio);
+  canvas.height = Math.round(cssH * ratio);
+}
+
+var last = performance.now();
+function frame(now) {
+  var dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  if (game.screen === 'play' && !shotMode) {
+    game.remaining -= dt;
+    if (game.remaining <= 0) { game.remaining = 0; timeUp(); }
+    if (game.combo > 1 && now - game.lastFind > COMBO_WINDOW) game.combo = 1;
+    if (game.hint && now > game.hintUntil) game.hint = null;
+    if (game.miss && now > game.missUntil) game.miss = null;
+  }
+  draw();
+  updateHud();
+  requestAnimationFrame(frame);
+}
+
+/* -------------------------------------------------------------------- boot */
+function boot() {
+  setup(seedOf());
+  resize();
+  window.addEventListener('resize', resize);
+
+  if (shotMode) {
+    // A staged frame for the screenshots: a fixed seed, a fixed number of
+    // finds, a frozen clock. The same code draws it as a played round.
+    var foundCount = Number.parseInt(params.get('found') || '0', 10) || 0;
+    if (shotMode === 'win') foundCount = game.diffs.length;
+    for (var i = 0; i < foundCount && i < game.diffs.length; i += 1) {
+      var diff = game.diffs[i];
+      game.found.push(diff);
+      game.score += 100 * game.combo;
+      game.combo = Math.min(5, game.combo + 1);
+    }
+    if (shotMode === 'title') { showTitle(); }
+    else if (shotMode === 'win') { game.screen = 'won'; win(); }
+    else { game.screen = 'play'; overlay.hidden = true; }
+    if (shotMode === 'play' || shotMode === 'win') game.remaining = shotMode === 'win' ? 84 : 133;
+    say(shotMode === 'title' ? 'Harbour Hunt.' : 'Found ' + game.found.length + ' of ' + game.diffs.length + '.');
+    // Paint at least once now: a headless or hidden tab may never run a frame.
+    draw();
+    updateHud();
+    window.__shotReady = true;
+    var painted = 0;
+    (function paint() {
+      draw();
+      updateHud();
+      painted += 1;
+      if (painted < 3) requestAnimationFrame(paint);
+    })();
+    return;
+  }
+
+  showTitle();
+  say('Harbour Hunt. Press Start or Enter.');
+  requestAnimationFrame(frame);
+}
+
+boot();
+</script>
+</body>
+</html>
