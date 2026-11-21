@@ -1,0 +1,6 @@
+[
+  { "name": "1-cover.jpg", "query": "?shot=play&seed=7&found=2", "w": 1280, "h": 720 },
+  { "name": "2-title.jpg", "query": "?shot=title&seed=7", "w": 1280, "h": 720 },
+  { "name": "3-found.jpg", "query": "?shot=play&seed=21&found=4", "w": 1280, "h": 720 },
+  { "name": "4-win.jpg", "query": "?shot=win&seed=21", "w": 1280, "h": 720 }
+]

@@ -1,128 +1,85 @@
 // spot-the-difference entry point (Node 22, standard library only).
 //
-// The grader mounts this repository READ-ONLY at /bot and runs `node main.ts`
-// as an unprivileged user (uid 65534) with an empty, writable /output and
-// MAKEFUN_OUTPUT_DIR pointing at it. So this program reads the repository and
-// writes only inside the output directory: it makes the directory first, copies
-// app/ and screenshots/ into it, writes dossier.json there, and prints a
-// summary. It never creates, changes or deletes anything inside the repository.
+// The game is the repository's game/ folder: plain static files a desktop
+// browser loads offline, game/index.html at its root, no build step and no
+// network request. This program hands that game in. The grader mounts the
+// repository READ-ONLY at /bot and runs `node /bot/main.ts` as uid 65534 with
+// an empty writable /output and MAKEFUN_OUTPUT_DIR naming it, so everything
+// this file writes goes under the output directory and nothing is created,
+// changed or deleted inside the repository.
 //
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 //
-// With MAKEFUN_OUTPUT_DIR unset it writes to /output, which is where the judge
-// reads the entry.
+// With MAKEFUN_OUTPUT_DIR unset it writes /output, which is where the judge
+// reads the entry. The dossier is not written out of hand: vendor/makefun-game.ts
+// is the kit's own library, unchanged, and buildDossier is what the scorer runs
+// on the handed-in tree, so the dossier written here is byte for byte the one
+// the gate rebuilds from game/ and screenshots/.
 
-import { cpSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { cpSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildDossier } from './vendor/makefun-game.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
-// The output directory is made before anything else, and its own parent too,
-// so a nested MAKEFUN_OUTPUT_DIR works.
+// Made before anything else, and its parent too, so a nested output path works.
 mkdirSync(outDir, { recursive: true });
 
-function copyTree(name) {
+/** The files under a directory, in sorted order, with their sizes. */
+function walk(dir) {
+  const found = [];
+  (function step(path) {
+    for (const entry of readdirSync(path, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+      const at = join(path, entry.name);
+      if (entry.isDirectory()) step(at);
+      else if (entry.isFile()) found.push({ path: at, bytes: statSync(at).size });
+    }
+  })(dir);
+  return found;
+}
+
+/** Copy one top-level directory of the repository into the output directory. */
+function handIn(name) {
   const from = join(here, name);
   const to = join(outDir, name);
   mkdirSync(to, { recursive: true });
   cpSync(from, to, { recursive: true });
-  return to;
+  const files = walk(to);
+  return { files: files.length, bytes: files.reduce((total, file) => total + file.bytes, 0) };
 }
 
-// A whole directory of the repository is handed in: app/ is the game.
-copyTree('app');
-copyTree('screenshots');
+// The game first: the dossier is built from what was just handed in.
+const game = handIn('game');
+const shots = handIn('screenshots');
 
-/** The pixel size of a PNG or JPEG, read from its header; null when unknown. */
-function imageSize(buffer) {
-  // PNG: the width and height are the first two big-endian words of the IHDR.
-  if (buffer.length > 24 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
-    return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
-  }
-  // JPEG: walk the markers to a start-of-frame, which carries the dimensions.
-  if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) return null;
-  let at = 2;
-  while (at + 9 < buffer.length) {
-    if (buffer[at] !== 0xff) { at += 1; continue; }
-    const marker = buffer[at + 1];
-    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) { at += 2; continue; }
-    const length = buffer.readUInt16BE(at + 2);
-    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
-      return { height: buffer.readUInt16BE(at + 5), width: buffer.readUInt16BE(at + 7) };
-    }
-    if (length < 2) return null;
-    at += 2 + length;
-  }
-  return null;
-}
-
-function listFiles(dir) {
-  return readdirSync(dir, { withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => entry.name)
-    .sort();
-}
-
-function bytesOf(dir, name) {
-  return statSync(join(dir, name)).size;
-}
-
-const shotNames = listFiles(join(here, 'screenshots'));
-const images = shotNames.map((name, index) => {
-  const buffer = readFileSync(join(here, 'screenshots', name));
-  const size = imageSize(buffer);
-  return {
-    index,
-    name,
-    bytes: buffer.length,
-    width: size ? size.width : 0,
-    height: size ? size.height : 0,
-    cover: index === 0,
-  };
-});
-
-const appNames = listFiles(join(here, 'app'));
-const appBytes = appNames.reduce((total, name) => total + bytesOf(join(here, 'app'), name), 0);
-
-// The page itself is read back for the dossier: its title and its hash. A
-// missing index.html is a broken entry, so it stops here rather than handing
-// in an empty app.
-const indexPath = join(here, 'app', 'index.html');
-if (!appNames.includes('index.html')) {
-  throw new Error('app/index.html is missing beside ' + join(here, 'app'));
-}
-const indexBytes = readFileSync(indexPath);
-const indexTitle = /<title>([\s\S]*?)<\/title>/.exec(indexBytes.toString('utf8'))?.[1]?.trim() || '';
-
-// The dossier the judge reads: the cover's index, every screenshot with its
-// size, and a few facts about the entry.
-const dossier = {
-  cover: 0,
-  images,
-  game: 'Harbour Hunt',
-  title: indexTitle,
-  kind: 'spot-the-difference',
-  differences: 5,
-  source: 'app/index.html',
-  indexSha256: createHash('sha256').update(indexBytes).digest('hex'),
-  app: { files: appNames.length, bytes: appBytes, index: 'app/index.html' },
-  screenshots: { files: images.length, bytes: images.reduce((total, image) => total + image.bytes, 0) },
-  repository: 'spot-the-difference',
-  writtenBy: 'main.ts',
-};
-
+// The scorer's own caps, from the bounty's gate. Only text_max_bytes shapes the
+// dossier's bytes; the rest bound what the gate accepts, and passing them means
+// this program refuses the same entry the gate would refuse.
 const dossierPath = join(outDir, 'dossier.json');
-writeFileSync(dossierPath, JSON.stringify(dossier, null, 2) + '\n');
+writeFileSync(
+  dossierPath,
+  buildDossier(outDir, {
+    text_max_bytes: 163840,
+    screenshots: { max: 4, max_bytes: 262144 },
+    game_max_files: 993,
+    game_max_bytes: 50331648,
+    game_path_max_bytes: 1000,
+  }),
+);
 
-const shotBytes = images.reduce((total, image) => total + image.bytes, 0);
+// Read the dossier back, so the summary is the handed-in file's own account of
+// itself rather than a second description kept in step by hand.
+const written = JSON.parse(readFileSync(dossierPath, 'utf8'));
+const cover = written.images[0];
+const sourceLine = (written.text.split('\n').find((line: string) => line.startsWith('Source files:')) || '').trim();
+
 console.log('spot-the-difference -> ' + outDir);
-if (indexTitle) console.log('  ' + indexTitle);
-console.log('  app/          ' + appNames.length + ' file(s), ' + appBytes + ' bytes');
-console.log('  screenshots/  ' + images.length + ' file(s), ' + shotBytes + ' bytes');
-for (const image of images) {
-  console.log('    ' + image.name + '  ' + image.width + 'x' + image.height + ', ' + image.bytes + ' bytes');
+console.log('  ' + written.schema + ', cover ' + (cover ? cover.name : 'none'));
+console.log('  game/          ' + game.files + ' file(s), ' + game.bytes + ' bytes');
+console.log('  screenshots/   ' + shots.files + ' file(s), ' + shots.bytes + ' bytes');
+for (const image of written.images) {
+  console.log('    ' + image.name + '  ' + image.media_type + ', sha256 ' + image.sha256.slice(0, 16) + '…');
 }
-console.log('  dossier.json  ' + bytesOf(outDir, 'dossier.json') + ' bytes, cover ' + (images[0] ? images[0].name : 'none'));
+console.log('  dossier.json   ' + statSync(dossierPath).size + ' bytes, ' + sourceLine);

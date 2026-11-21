@@ -18,8 +18,9 @@ the props in the scene. “New round” deals a fresh seed.
 
 ## Run it
 
-Hand the entry in (writes `app/`, `screenshots/` and `dossier.json` into the
-output directory; it never writes inside the repository):
+Hand the entry in (writes `game/`, `screenshots/` and `dossier.json` into the
+output directory; it never writes inside the repository, and the dossier is the
+kit's own `buildDossier` output, so it is byte for byte what the gate rebuilds):
 
 ```sh
 mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
@@ -28,10 +29,11 @@ mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 With `MAKEFUN_OUTPUT_DIR` unset it writes `/output`, which is where the judge
 reads the entry.
 
-To play it, serve `app/` with any static file server and open `index.html`:
+To play it, serve `game/` with any static file server and open `index.html`
+(`node serve.ts` does exactly that):
 
 ```sh
-python3 -m http.server 8080 --directory app
+python3 -m http.server 8080 --directory game
 # then open http://localhost:8080/
 ```
 
@@ -44,9 +46,12 @@ python3 -m http.server 8080 --directory app
 
 ## Files
 
-- `app/index.html` — the whole game: scene, differences, input, HUD, styles.
+- `game/index.html` — the whole game: scene, differences, input, HUD, styles.
 - `screenshots/` — renders of the game itself (the first by name is the cover).
 - `main.ts` — the entry point; reads the repository, writes the output directory.
+- `vendor/makefun-game.ts` — the kit's library, unchanged; `main.ts` calls its
+  `buildDossier` for `dossier.json`.
+- `serve.ts`, `shots.json` — the kit's local server and the screenshot manifest.
 - `.makefun/owner.json` — the entry’s wallet.
 
 ---
